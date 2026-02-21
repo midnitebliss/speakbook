@@ -10,6 +10,11 @@ CHUNK_SIZE_CHARS = 4800
 MAX_RETRIES = 3
 
 
+class VoicePlanError(Exception):
+    """Raised when the selected voice requires a higher-tier plan (402)."""
+    pass
+
+
 def split_into_sentence_chunks(text: str, max_chars: int = CHUNK_SIZE_CHARS) -> list[str]:
     """
     Split text into chunks of at most max_chars, breaking at sentence boundaries.
@@ -105,6 +110,15 @@ def synthesize_chunk(
         except Exception as e:
             last_error = e
             error_str = str(e).lower()
+            # Non-retryable errors — clear message instead of raw traceback
+            if "401" in error_str or "unauthorized" in error_str:
+                raise SystemExit("ERROR: Invalid API key. Check ELEVENLABS_API_KEY in .env")
+            if "402" in error_str or "payment" in error_str or "quota" in error_str:
+                raise VoicePlanError(
+                    f"Voice '{voice_id}' requires a paid plan (402 Payment Required)."
+                )
+            if "422" in error_str or "invalid" in error_str:
+                raise SystemExit(f"ERROR: Invalid request — {e}")
             # Retry on rate limits or server errors
             if "429" in error_str or "rate" in error_str or "5" in error_str[:3]:
                 print(f"\n  Rate limit / server error (attempt {attempt + 1}/{MAX_RETRIES}): {e}")

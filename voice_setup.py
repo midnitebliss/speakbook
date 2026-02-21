@@ -25,7 +25,7 @@ def save_voice_id(voice_id: str) -> None:
     print(f"  Saved VOICE_ID={voice_id} to {ENV_FILE}")
 
 
-def search_voice_library(client, query: str = "Stephen Fry") -> str | None:
+def search_voice_library(client, query: str = "narrator") -> str | None:
     """
     Search the ElevenLabs public Voice Library for a matching voice.
     Returns voice_id of the best match, or None if not found.
@@ -77,7 +77,7 @@ def search_voice_library(client, query: str = "Stephen Fry") -> str | None:
         return None
 
 
-def clone_voice_from_sample(client, sample_path: Path, voice_name: str = "Stephen Fry Clone") -> str:
+def clone_voice_from_sample(client, sample_path: Path, voice_name: str = "Cloned Voice") -> str:
     """
     Upload audio sample to ElevenLabs Instant Voice Cloning.
     Returns voice_id string.
@@ -99,7 +99,7 @@ def setup_voice(
     client,
     sample_path: Path | None = None,
     use_library: bool = True,
-    search_query: str = "Stephen Fry",
+    search_query: str = "narrator",
 ) -> str:
     """
     Resolve a voice ID using the following priority:
@@ -136,5 +136,5 @@ def setup_voice(
 
     # Priority 4: Default voice
     print(f"  Using default ElevenLabs voice (Aria, id: {DEFAULT_VOICE_ID})")
-    print("  Tip: Use --voice-sample to clone a Stephen Fry voice for better results.")
+    print("  Tip: Use --voice-sample to clone a custom voice for better results.")
     return DEFAULT_VOICE_ID

@@ -104,7 +104,15 @@ Examples:
         "--dry-run", action="store_true",
         help="Parse input and list chapters without calling TTS API",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    # Infer output format from --output extension if --format wasn't explicitly set
+    if args.output and "--format" not in sys.argv:
+        ext = args.output.suffix.lower().lstrip(".")
+        if ext in ("m4b", "mp3"):
+            args.output_format = ext
+
+    return args
 
 
 def truncate_at_sentence_boundary(text: str, max_chars: int) -> str:
@@ -182,8 +190,8 @@ def main():
         format_duration,
         write_ffmetadata,
     )
-    from tts_engine import synthesize_chapter
-    from voice_setup import setup_voice
+    from tts_engine import synthesize_chapter, VoicePlanError
+    from voice_setup import setup_voice, DEFAULT_VOICE_ID
 
     # Parse input file
     print(f"Parsing: {args.input_path}")
@@ -267,18 +275,37 @@ def main():
             continue
 
         print(f"Chapter {chapter.index}: {chapter.title}")
-        chunk_paths = synthesize_chapter(
-            client=client,
-            chapter_index=chapter.index,
-            chapter_title=chapter.title,
-            tts_title=chapter.tts_title,
-            chapter_text=chapter.text,
-            voice_id=voice_id,
-            model_id=args.model,
-            chunks_dir=chunks_dir,
-            progress=progress,
-            save_progress_fn=_save,
-        )
+        try:
+            chunk_paths = synthesize_chapter(
+                client=client,
+                chapter_index=chapter.index,
+                chapter_title=chapter.title,
+                tts_title=chapter.tts_title,
+                chapter_text=chapter.text,
+                voice_id=voice_id,
+                model_id=args.model,
+                chunks_dir=chunks_dir,
+                progress=progress,
+                save_progress_fn=_save,
+            )
+        except VoicePlanError:
+            if voice_id == DEFAULT_VOICE_ID:
+                raise SystemExit("ERROR: Even the default voice failed. Check your ElevenLabs plan.")
+            print(f"\n  WARNING: Voice '{voice_id}' requires a paid plan.")
+            print(f"  Falling back to default voice (Aria, {DEFAULT_VOICE_ID}).\n")
+            voice_id = DEFAULT_VOICE_ID
+            chunk_paths = synthesize_chapter(
+                client=client,
+                chapter_index=chapter.index,
+                chapter_title=chapter.title,
+                tts_title=chapter.tts_title,
+                chapter_text=chapter.text,
+                voice_id=voice_id,
+                model_id=args.model,
+                chunks_dir=chunks_dir,
+                progress=progress,
+                save_progress_fn=_save,
+            )
 
         print(f"  Concatenating {len(chunk_paths)} chunks...")
         concatenate_audio_files(chunk_paths, chapter_mp3)
