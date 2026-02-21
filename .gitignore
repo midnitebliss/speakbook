@@ -6,4 +6,6 @@ __pycache__/
 *.mp3
 *.m4b
 *.wav
-stephen_fry_sample.mp3
+*.epub
+*.pdf
+venv/

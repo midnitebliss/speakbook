@@ -1,8 +1,8 @@
 # speakbook
 
-Convert EPUB files into M4B audiobooks using ElevenLabs TTS, with support for voice cloning.
+Convert documents into audiobooks using ElevenLabs TTS, with support for voice cloning.
 
-Built to narrate *The Inimitable Jeeves* in the voice of Sir Stephen Fry.
+Supports **EPUB**, **Markdown**, and **PDF** input — outputs **M4B** (with chapter markers) or **MP3**.
 
 ---
 
@@ -31,99 +31,90 @@ cp .env.example .env
 
 ---
 
+## Supported Formats
+
+| Input | How chapters are detected |
+|---|---|
+| **EPUB** (directory or ZIP) | Table of contents (`toc.ncx`) |
+| **Markdown** (`.md`) | `#` / `##` headings; YAML frontmatter for title/author |
+| **PDF** | PDF bookmarks → heading patterns → fixed page chunks |
+
+---
+
 ## Usage
 
 ### 1. Dry run — inspect chapters, no API calls
 
 ```bash
 python speakbook.py "The Inimitable Jeeves.epub/" --dry-run
+python speakbook.py essay.md --dry-run
+python speakbook.py book.pdf --dry-run
 ```
 
-Output:
-```
-Found 18 chapters:
-   1. Chapter I: Jeeves Exerts The Old Cerebellum     3024 words   16372 chars
-   2. Chapter II: No Wedding Bells For Bingo          2802 words   14739 chars
-   ...
-  Total: 370,446 chars | ~78 API chunks | ~$111.13 at pay-as-you-go
-```
+### 2. Get a voice sample (optional)
 
-### 2. Get a Stephen Fry voice sample
-
-Find a YouTube clip of Stephen Fry speaking clearly — no background music, no other voices. Good sources:
-
-- The official **QI YouTube channel**
-- **Penguin Books** audiobook trailers
-- Any interview or lecture with clear audio
-
-Then download and prepare the sample:
+Find a YouTube clip of someone speaking clearly — no background music, no other voices.
 
 ```bash
 python get_voice_sample.py \
   --url "https://www.youtube.com/watch?v=YOUR_VIDEO_ID" \
   --start 30 \
   --duration 120 \
-  --output stephen_fry_sample.mp3
+  --output voice_sample.mp3
 ```
 
-Options:
-- `--start` — skip N seconds at the beginning (e.g. to skip an intro)
-- `--duration` — how many seconds to extract (120 = 2 minutes; 1–5 minutes is ideal)
-
-> **Tip:** If ElevenLabs' public Voice Library already has a Stephen Fry voice, speakbook will find and use it automatically — no sample needed.
+> **Tip:** If ElevenLabs' public Voice Library already has the voice you want, speakbook will find and use it automatically — no sample needed.
 
 ### 3. Test with one chapter
 
-Before committing to the full book, test with a single chapter to validate the voice quality:
-
 ```bash
-python speakbook.py "The Inimitable Jeeves.epub/" \
-  --voice-sample stephen_fry_sample.mp3 \
-  --chapters 1-1 \
-  --model eleven_turbo_v2_5
+python speakbook.py book.epub --voice-sample voice_sample.mp3 --chapters 1-1
 ```
 
-This produces `output/The_Inimitable_Jeeves.m4b` with just Chapter One. Open it in Apple Books or VLC to check how it sounds.
-
-### 4. Full book
-
-Once you're happy with the voice, run the full conversion:
+### 4. Full conversion
 
 ```bash
-python speakbook.py "The Inimitable Jeeves.epub/" \
-  --voice-sample stephen_fry_sample.mp3
+# M4B with chapter markers (default)
+python speakbook.py book.epub --voice-sample voice_sample.mp3
+
+# MP3 output
+python speakbook.py essay.md --format mp3
+
+# Custom output path
+python speakbook.py book.pdf --output ~/Desktop/audiobook.m4b
 ```
 
-Output: `output/The_Inimitable_Jeeves.m4b`
-
-This takes a while (the book is ~370k characters across ~78 API calls). Progress is saved after every chunk — if it fails or you stop it, re-running will resume from where it left off.
+Progress is saved after every chunk — if interrupted, re-running the same command resumes where it left off.
 
 ---
 
 ## All CLI Options
 
 ```
-python speakbook.py <epub_path> [options]
+python speakbook.py <input_path> [options]
 
 Positional:
-  epub_path             Path to EPUB file or expanded EPUB directory
+  input_path            Path to EPUB, Markdown (.md), or PDF file
 
 Voice options:
-  --voice-sample FILE   Audio sample for voice cloning (MP3/WAV, 30s–5min)
+  --voice-sample FILE   Audio sample for voice cloning (MP3/WAV, 30s-5min)
   --voice-id ID         Use a specific ElevenLabs voice ID directly
   --no-library-search   Skip searching the ElevenLabs Voice Library
 
 Model options:
-  --model MODEL         TTS model to use (default: eleven_multilingual_v2)
-                        Options: eleven_multilingual_v2 (quality)
-                                 eleven_turbo_v2_5 (faster, same price)
+  --model MODEL         TTS model (default: eleven_turbo_v2_5)
+                        Options: eleven_turbo_v2_5 (faster, cheaper)
+                                 eleven_multilingual_v2 (quality)
                                  eleven_monolingual_v1 (older)
 
 Output options:
-  --output-dir DIR      Output directory (default: ./output)
+  --format {m4b,mp3}    Output format (default: m4b)
+  --output PATH         Output file path (default: output/<Title>.m4b/.mp3)
+  --output-dir DIR      Working directory for intermediate files (default: ./output)
   --chapters RANGE      Process only specific chapters, e.g. '1-3' or '5'
+  --max-chars N         Limit total characters sent to TTS (truncates at sentence boundary)
   --no-resume           Ignore previous progress and start fresh
-  --dry-run             Parse EPUB and list chapters without calling the API
+  --dry-run             Parse input and list chapters without calling TTS API
 ```
 
 ---
@@ -133,7 +124,7 @@ Output options:
 On first run, speakbook resolves the voice in this order:
 
 1. **Cached** — if `VOICE_ID` is already saved in `.env`, use it immediately
-2. **Voice Library** — searches ElevenLabs' public library for "Stephen Fry"; uses the first match
+2. **Voice Library** — searches ElevenLabs' public library for a matching voice
 3. **Voice Cloning** — if `--voice-sample` is provided, uploads it via Instant Voice Cloning
 4. **Default** — falls back to ElevenLabs' built-in Aria voice
 
@@ -145,18 +136,14 @@ To force a different voice, clear `VOICE_ID=` in `.env` or pass `--voice-id` dir
 
 ## ElevenLabs Pricing
 
-The Inimitable Jeeves is ~370,000 characters. Rates below are for the **Flash/Turbo** model (`eleven_turbo_v2_5`).
+Rates below are for the **Flash/Turbo** model (`eleven_turbo_v2_5`).
 
-| Plan | Monthly fee | Chars included | Overage rate | **Total for this book** |
-|---|---|---|---|---|
-| Free | $0 | 20,000 | — | Not enough |
-| Starter | $5 | 60,000 | No overage | Not enough |
-| **Creator** | **$22** (first month **$11**) | **200,000** | **$0.15 / 1K** | **~$47.60** (~$36.60 first month) |
-| Pro | $99 | 1,000,000 | $0.12 / 1K | $99 (full quota, nothing extra) |
-
-**Recommended:** Sign up for **Creator** ($22/mo, half-price first month), run the full book, then cancel. Total cost: ~$37–$48.
-
-> The `eleven_multilingual_v2` model (default) has slightly higher per-character rates than Turbo. Use `--model eleven_turbo_v2_5` to stay on the cheaper Flash/Turbo pricing with near-identical quality.
+| Plan | Monthly fee | Chars included | Overage rate |
+|---|---|---|---|
+| Free | $0 | 20,000 | — |
+| Starter | $5 | 60,000 | No overage |
+| **Creator** | **$22** (first month **$11**) | **200,000** | **$0.15 / 1K** |
+| Pro | $99 | 1,000,000 | $0.12 / 1K |
 
 Voice cloning (Instant Voice Cloning) requires **Creator plan or above**.
 
@@ -164,28 +151,27 @@ Voice cloning (Instant Voice Cloning) requires **Creator plan or above**.
 
 ## Output Format
 
-The final `.m4b` file contains:
+**M4B** (default):
+- AAC audio at 64 kbps
+- Named chapter markers — navigate in Apple Books, Overcast, VLC, etc.
+- Embedded cover art (from EPUB, if available)
+- Title, author, genre metadata
 
-- **AAC audio** at 64 kbps (standard audiobook quality, small file size)
-- **18 named chapter markers** — navigate by chapter in Apple Books, Overcast, VLC, etc.
-- **Embedded cover art** (taken from the EPUB)
-- **Metadata**: title, author, genre
+**MP3**:
+- Concatenated chapter audio, no chapter markers
 
 ---
 
 ## Resuming After Interruption
 
-Progress is saved to `output/progress.json` after every API chunk. If the process is interrupted:
+Progress is saved to `output/progress.json` after every API chunk.
 
 ```bash
-# Just re-run the same command — it picks up where it left off
-python speakbook.py "The Inimitable Jeeves.epub/"
-```
+# Re-run the same command — picks up where it left off
+python speakbook.py book.epub
 
-To start fresh instead:
-
-```bash
-python speakbook.py "The Inimitable Jeeves.epub/" --no-resume
+# Start fresh
+python speakbook.py book.epub --no-resume
 ```
 
 ---
@@ -195,7 +181,13 @@ python speakbook.py "The Inimitable Jeeves.epub/" --no-resume
 ```
 speakbook/
 ├── speakbook.py          # CLI entry point
-├── epub_parser.py        # EPUB → Chapter objects
+├── models.py             # Chapter + BookMetadata dataclasses
+├── parsers/
+│   ├── __init__.py       # Format dispatcher (epub/md/pdf)
+│   ├── base.py           # ParseResult, clean_text()
+│   ├── epub_parser.py    # EPUB → chapters (toc.ncx + content.opf)
+│   ├── markdown_parser.py # Markdown → chapters (headings + frontmatter)
+│   └── pdf_parser.py     # PDF → chapters (bookmarks/heuristics)
 ├── tts_engine.py         # Text chunking + ElevenLabs API calls
 ├── voice_setup.py        # Voice library / cloning / .env persistence
 ├── m4b_builder.py        # ffmpeg → M4B with chapter markers
@@ -206,5 +198,5 @@ speakbook/
     ├── audio_chunks/     # Per-chunk MP3 files
     ├── chapters/         # Per-chapter MP3 files
     ├── progress.json     # Resumability state
-    └── *.m4b             # Final audiobook
+    └── *.m4b / *.mp3     # Final audiobook
 ```
