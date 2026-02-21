@@ -9,3 +9,4 @@ __pycache__/
 *.epub
 *.pdf
 venv/
+.claude/
