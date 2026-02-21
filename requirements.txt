@@ -1,0 +1,7 @@
+beautifulsoup4>=4.12.3
+lxml>=5.2.2
+elevenlabs>=1.13.0
+python-dotenv>=1.0.1
+tqdm>=4.66.4
+yt-dlp>=2024.8.6
+pymupdf>=1.24.0

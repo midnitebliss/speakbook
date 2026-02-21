@@ -1,0 +1,9 @@
+.env
+output/
+__pycache__/
+*.pyc
+.DS_Store
+*.mp3
+*.m4b
+*.wav
+stephen_fry_sample.mp3
